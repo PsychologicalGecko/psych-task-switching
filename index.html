@@ -2,30 +2,207 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Customized Task-Switching Experiment</title>
-
-  <!-- Core jsPsych library -->
+  <title>Task-switching RT demo (jsPsych)</title>
+  <!-- jsPsych core -->
   <script src="https://unpkg.com/jspsych@7.3.0/dist/jspsych.js"></script>
-
-  <!-- Plugins (UMD/browser versions) -->
-  <script src="https://unpkg.com/jspsych@7.3.0/dist/plugins/jspsych-html-keyboard-response.js"></script>
-  <script src="https://unpkg.com/jspsych@7.3.0/dist/plugins/jspsych-instructions.js"></script>
-  <script src="https://unpkg.com/jspsych@7.3.0/dist/plugins/jspsych-survey-text.js"></script>
-
-  <!-- CSS -->
+  <!-- plugins -->
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.0/dist/index.js"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-instructions@1.0.0/dist/index.js"></script>
   <link href="https://unpkg.com/jspsych@7.3.0/dist/css/jspsych.css" rel="stylesheet" />
-
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
     .stim { font-size: 48px; margin-top: 20px; }
     .rule { font-size: 20px; font-weight: bold; margin-bottom: 8px; }
   </style>
 </head>
+<body></body>
 
-<body>
-  <div id="jspsych-target"></div>
-  
-  <!-- Your experiment code -->
-  <script src="experiment.js"></script>
-</body>
+<script>
+/* ---------- CONFIG ---------- */
+// Number of trials (change as desired)
+const N_TRIALS = 48;
+
+// Flip mode: 'alternate' (every trial), 'block' (every N trials), 'prob' (probability of switch)
+const FLIP_MODE = 'alternate'; // 'alternate' | 'block' | 'prob'
+const BLOCK_SIZE = 8;          // used if FLIP_MODE === 'block'
+const SWITCH_PROB = 0.3;       // used if FLIP_MODE === 'prob' (probability to switch on each trial)
+
+/* ---------- HELPERS ---------- */
+// Utility: random letter generator
+function randomLetter() {
+  const letters = "abcdefghijklmnopqrstuvwxyz";
+  return letters.charAt(Math.floor(Math.random() * letters.length));
+}
+function isVowel(ch) {
+  return /^[aeiou]$/i.test(ch);
+}
+
+// Decide rule for each trial according to flip mode
+function generateRules(n) {
+  const rules = [];
+  if (FLIP_MODE === 'alternate') {
+    for (let i=0;i<n;i++) rules.push((i % 2 === 0) ? 'A' : 'B');
+  } else if (FLIP_MODE === 'block') {
+    for (let i=0;i<n;i++) rules.push(Math.floor(i / BLOCK_SIZE) % 2 === 0 ? 'A' : 'B');
+  } else if (FLIP_MODE === 'prob') {
+    // start with A, then probabilistically switch
+    let current = 'A';
+    for (let i=0;i<n;i++){
+      rules.push(current);
+      if (Math.random() < SWITCH_PROB) current = (current === 'A') ? 'B' : 'A';
+    }
+  } else {
+    // default fallback
+    for (let i=0;i<n;i++) rules.push('A');
+  }
+  return rules;
+}
+
+/* ---------- BUILD TRIALS ---------- */
+const rules = generateRules(N_TRIALS);
+const trials = [];
+
+for (let t = 0; t < N_TRIALS; t++) {
+  // Construct stimulus depending on rule
+  // Rule A: respond to Vowel vs Consonant (F for vowel, J for consonant)
+  // Rule B: respond to Case (F for lowercase, J for uppercase)
+  let stimChar;
+  if (rules[t] === 'A') {
+    // choose letter (sometimes vowel, sometimes consonant)
+    // ensure variety by 40% vowels, 60% consonants
+    if (Math.random() < 0.4) {
+      const vowels = "aeiou";
+      stimChar = vowels.charAt(Math.floor(Math.random()*vowels.length));
+    } else {
+      // pick consonant
+      let letter = randomLetter();
+      while (isVowel(letter)) letter = randomLetter();
+      stimChar = letter;
+    }
+  } else {
+    // Case task: choose randomly uppercase or lowercase
+    const base = randomLetter();
+    stimChar = Math.random() < 0.5 ? base : base.toUpperCase();
+  }
+
+  const html = `
+    <div class="rule">Rule: <strong>${rules[t] === 'A' ? 'A — Vowel vs Consonant (F = vowel, J = consonant)' : 'B — Case (F = lowercase, J = UPPERCASE)'}</strong></div>
+    <div class="stim">${stimChar}</div>
+    <div style="margin-top:12px;font-size:14px;color:#555">Press <strong>F</strong> or <strong>J</strong></div>
+  `;
+
+  trials.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: html,
+    choices: ['f','j'],
+    trial_duration: 3000, // optional timeout in ms
+    data: {
+      trial_number: t+1,
+      rule: rules[t],
+      stimulus_char: stimChar
+    },
+    on_finish: function(data) {
+      // correctness calculation
+      const key = data.response;
+      const char = data.stimulus_char;
+      if (data.rule === 'A') {
+        const vowel = isVowel(char);
+        data.correct = (vowel && key === 'f') || (!vowel && key === 'j');
+        // annotate stimulus_type for convenience
+        data.stimulus_type = vowel ? 'vowel' : 'consonant';
+      } else {
+        const lower = (char === char.toLowerCase());
+        data.correct = (lower && key === 'f') || (!lower && key === 'j');
+        data.stimulus_type = lower ? 'lowercase' : 'uppercase';
+      }
+      // record whether trial is a switch or repeat (relative to previous trial)
+      const previous = jsPsych.data.get().last(1).values()[0];
+      if (previous && previous.trial_number) {
+        data.switch = (previous.rule !== data.rule);
+      } else {
+        data.switch = false; // first trial
+      }
+    }
+  });
+
+  // Add a short ITI
+  trials.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<div style="height:40px"></div>',
+    choices: "NO_KEYS",
+    trial_duration: 300
+  });
+}
+
+/* ---------- TIMELINE ---------- */
+const timeline = [];
+
+// Consent/instructions
+timeline.push({
+  type: jsPsychInstructions,
+  pages: [
+    `<h2>Welcome</h2>
+     <p>On each trial you'll see a rule and a character.</p>
+     <p>Follow the rule and press the correct key:</p>
+     <ul>
+       <li><strong>Rule A</strong>: Press <strong>F</strong> for <em>vowels</em> (a,e,i,o,u), <strong>J</strong> for <em>consonants</em>.</li>
+       <li><strong>Rule B</strong>: Press <strong>F</strong> for <em>lowercase</em>, <strong>J</strong> for <em>UPPERCASE</em>.</li>
+     </ul>
+     <p>Click next to practice a few trials, then the real task will begin.</p>`
+  ],
+  show_clickable_nav: true
+});
+
+// Practice block (3 trials)
+const practice = [
+  {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<div class="rule"><strong>Practice — Rule A</strong></div><div class="stim">A</div><div style="margin-top:12px">Press F or J</div>`,
+    choices: ['f','j'],
+    on_finish: function(data){ data.practice = true; data.correct = (data.response === 'f'); data.rule='A'; data.stimulus_char='A'; data.stimulus_type='vowel'; }
+  },
+  {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<div class="rule"><strong>Practice — Rule B</strong></div><div class="stim">g</div><div style="margin-top:12px">Press F or J</div>`,
+    choices: ['f','j'],
+    on_finish: function(data){ data.practice = true; data.correct = (data.response === 'f'); data.rule='B'; data.stimulus_char='g'; data.stimulus_type='lowercase'; }
+  }
+];
+timeline.push(...practice);
+
+// Main task instructions continue
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: `<p>Practice done. The main block will start on the next screen. Try to respond as quickly and accurately as possible.</p><p>Press any key to begin.</p>`
+});
+
+// Main task trials
+timeline.push(...trials);
+
+// End and download data
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: '<h2>Finished</h2><p>Your data will be downloaded automatically (CSV).</p><p>Thank you!</p>',
+  choices: "NO_KEYS",
+  trial_duration: 1500,
+  on_start: function(){ /* nothing */ },
+  on_finish: function(){
+    // create csv
+    const csv = jsPsych.data.get().filter({practice: undefined}).csv(); // exclude practice if desired
+    // download
+    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'task_data.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+});
+
+/* ---------- RUN ---------- */
+jsPsych.run(timeline);
+</script>
 </html>
