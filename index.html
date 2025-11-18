@@ -1,25 +1,77 @@
-<!-- ====================
-index.html (shell only)
-==================== -->
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Task Switching Experiment</title>
-<link rel="stylesheet" href="jspsych/jspsych.css">
+  <meta charset="utf-8" />
+  <title>Task-switching RT demo (jsPsych)</title>
+  <script src="https://unpkg.com/jspsych@7.3.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.0"></script>
 </head>
-<body>
-<div id="jspsych-target"></div>
+<body></body>
+<script>
+  // Minimal jsPsych v7 setup
+  const jsPsych = initJsPsych({
+    on_finish: function() {
+      // Create CSV string of all data
+      const csv = jsPsych.data.get().csv();
+      // Trigger download in browser
+      const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'task_data.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      // Optionally show a message
+      document.body.innerHTML = '<h2>Thanks — your data was downloaded.</h2>';
+    }
+  });
 
-<!-- jsPsych Core -->
-<script src="jspsych/jspsych.js"></script>
+  // Example: two instructions (rule A vs rule B)
+  // We'll flip instruction every trial (you can change to blocks or random)
+  const nTrials = 24;
+  const trials = [];
+  for (let t=0; t<nTrials; t++){
+    // flip each trial: even -> rule A, odd -> rule B (change as needed)
+    const rule = (t % 2 === 0) ? 'A' : 'B';
+    // Stimulus content changes per rule. Here we present a letter and map keys differently.
+    let prompt = '';
+    if (rule === 'A') {
+      prompt = '<p><strong>RULE A</strong>: Press F for vowel (A,E,I,O,U), J for consonant.</p><p style="font-size:40px">A</p>';
+    } else {
+      prompt = '<p><strong>RULE B</strong>: Press F for lowercase, J for uppercase.</p><p style="font-size:40px">a</p>';
+    }
+    trials.push({
+      type: 'html-keyboard-response',
+      stimulus: prompt,
+      choices: ['f','j'],
+      data: {trial_index: t, rule: rule},
+      on_finish: function(data){
+        // record RT and correctness according to rule
+        const key = data.response; // 'f' or 'j'
+        const rt = data.rt;
+        data.rt = rt;
+        // Simple correctness heuristics (for demo only)
+        if (data.rule === 'A') {
+          // example: treat displayed char's vowel/consonant
+          const char = data.stimulus.match(/<p style="font-size:40px">(.+?)<\/p>/)[1];
+          const isVowel = /^[AEIOU]$/i.test(char);
+          data.correct = (isVowel && key==='f') || (!isVowel && key==='j');
+        } else {
+          const char = data.stimulus.match(/<p style="font-size:40px">(.+?)<\/p>/)[1];
+          const isLower = char === char.toLowerCase();
+          data.correct = (isLower && key==='f') || (!isLower && key==='j');
+        }
+      }
+    });
+  }
 
-<!-- Plugins -->
-<script src="jspsych/plugins/jspsych-html-keyboard-response.js"></script>
-<script src="jspsych/plugins/jspsych-survey-html-form.js"></script>
-<script src="jspsych/plugins/jspsych-fullscreen.js"></script>
+  const timeline = [
+    {type: 'html-keyboard-response', stimulus: '<h2>Instructions</h2><p>Press F or J according to the rule shown each trial.<br>Click any key to start.</p>'},
+    ...trials,
+    {type: 'html-keyboard-response', stimulus: '<p>Task complete — your data will be downloaded automatically.</p>', choices: []}
+  ];
 
-<!-- Experiment Logic -->
-<script src="experiment.js"></script>
-</body>
-</html>
+  jsPsych.run(timeline);
+</script>
