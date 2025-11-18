@@ -2,76 +2,190 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Task-switching RT demo (jsPsych)</title>
-  <script src="https://unpkg.com/jspsych@7.3.0"></script>
-  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.0"></script>
+  <title>Customized Task-Switching Experiment</title>
+  <script src="https://unpkg.com/jspsych@7.3.0/dist/jspsych.js"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.0/dist/index.js"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-instructions@1.0.0/dist/index.js"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.0/dist/index.js"></script>
+  <link href="https://unpkg.com/jspsych@7.3.0/dist/css/jspsych.css" rel="stylesheet" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .stim { font-size: 48px; margin-top: 20px; }
+    .rule { font-size: 20px; font-weight: bold; margin-bottom: 8px; }
+  </style>
 </head>
 <body></body>
 <script>
-  // Minimal jsPsych v7 setup
-  const jsPsych = initJsPsych({
-    on_finish: function() {
-      // Create CSV string of all data
-      const csv = jsPsych.data.get().csv();
-      // Trigger download in browser
-      const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'task_data.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      // Optionally show a message
-      document.body.innerHTML = '<h2>Thanks — your data was downloaded.</h2>';
-    }
-  });
+/* =====================================
+   SETTINGS
+===================================== */
+const N_TRIALS = 40;
+const SWITCH_PROB = 0.4; // probability of switching rules
 
-  // Example: two instructions (rule A vs rule B)
-  // We'll flip instruction every trial (you can change to blocks or random)
-  const nTrials = 24;
-  const trials = [];
-  for (let t=0; t<nTrials; t++){
-    // flip each trial: even -> rule A, odd -> rule B (change as needed)
-    const rule = (t % 2 === 0) ? 'A' : 'B';
-    // Stimulus content changes per rule. Here we present a letter and map keys differently.
-    let prompt = '';
-    if (rule === 'A') {
-      prompt = '<p><strong>RULE A</strong>: Press F for vowel (A,E,I,O,U), J for consonant.</p><p style="font-size:40px">A</p>';
-    } else {
-      prompt = '<p><strong>RULE B</strong>: Press F for lowercase, J for uppercase.</p><p style="font-size:40px">a</p>';
+/* =====================================
+   PARTICIPANT INFO COLLECTION
+===================================== */
+let participantData = {};
+const demo = {
+  type: jsPsychSurveyText,
+  questions: [
+    {prompt: 'Age:', name: 'age'},
+    {prompt: 'Gender:', name: 'gender'}
+  ],
+  on_finish: data => { participantData = data.response; }
+};
+
+/* =====================================
+   RANDOM RULE GENERATOR
+===================================== */
+function generateRandomRuleSequence(n, switchProb) {
+  const rules = [];
+  let current = Math.random() < 0.5 ? 'shape' : 'dots';
+  for (let i = 0; i < n; i++) {
+    rules.push(current);
+    if (Math.random() < switchProb) {
+      current = current === 'shape' ? 'dots' : 'shape';
     }
+  }
+  return rules;
+}
+
+/* =====================================
+   SHAPES WITH DOTS (ROUND 1)
+===================================== */
+function generateShapeStimulus(rule) {
+  const shapes = ['■', '◆'];
+  const shape = shapes[Math.floor(Math.random() * shapes.length)];
+  const dots = Math.random() < 0.5 ? 2 : 3;
+
+  let ruleInstruction = '';
+  let correctAnswer = '';
+
+  if (rule === 'shape') {
+    ruleInstruction = 'Rule: Press F for ■ and J for ◆';
+    correctAnswer = shape === '■' ? 'f' : 'j';
+  } else {
+    ruleInstruction = 'Rule: Press F for 2 dots and J for 3 dots';
+    correctAnswer = dots === 2 ? 'f' : 'j';
+  }
+
+  const html = `
+    <div class="rule">${ruleInstruction}</div>
+    <div class="stim">${shape} (${dots} dots)</div>
+  `;
+
+  return { html, shape, dots, correctAnswer };
+}
+
+/* =====================================
+   LETTER/NUMBER STIMULI (ROUND 2)
+===================================== */
+function generateLetterNumberStimulus(rule) {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const letter = letters[Math.floor(Math.random() * letters.length)];
+  const number = Math.floor(Math.random() * 9) + 1;
+
+  let ruleInstruction = '';
+  let correctAnswer = '';
+
+  if (rule === 'shape') {
+    ruleInstruction = 'Rule: Press F for LETTER and J for NUMBER';
+    correctAnswer = /[A-Z]/.test(letter) ? 'f' : 'j';
+  } else {
+    ruleInstruction = 'Rule: Press F for EVEN and J for ODD';
+    correctAnswer = number % 2 === 0 ? 'f' : 'j';
+  }
+
+  const html = `
+    <div class="rule">${ruleInstruction}</div>
+    <div class="stim">${letter} / ${number}</div>
+  `;
+
+  return { html, letter, number, correctAnswer };
+}
+
+/* =====================================
+   TRIAL BUILDER
+===================================== */
+function buildTrials(stimGenFunc, roundLabel) {
+  const rules = generateRandomRuleSequence(N_TRIALS, SWITCH_PROB);
+  let trialNumber = 1;
+  const trials = [];
+
+  for (let i = 0; i < N_TRIALS; i++) {
+    const r = rules[i];
+    const stim = stimGenFunc(r);
+
     trials.push({
-      type: 'html-keyboard-response',
-      stimulus: prompt,
-      choices: ['f','j'],
-      data: {trial_index: t, rule: rule},
-      on_finish: function(data){
-        // record RT and correctness according to rule
-        const key = data.response; // 'f' or 'j'
-        const rt = data.rt;
-        data.rt = rt;
-        // Simple correctness heuristics (for demo only)
-        if (data.rule === 'A') {
-          // example: treat displayed char's vowel/consonant
-          const char = data.stimulus.match(/<p style="font-size:40px">(.+?)<\/p>/)[1];
-          const isVowel = /^[AEIOU]$/i.test(char);
-          data.correct = (isVowel && key==='f') || (!isVowel && key==='j');
-        } else {
-          const char = data.stimulus.match(/<p style="font-size:40px">(.+?)<\/p>/)[1];
-          const isLower = char === char.toLowerCase();
-          data.correct = (isLower && key==='f') || (!isLower && key==='j');
-        }
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: stim.html,
+      choices: ['f', 'j'],
+      data: {
+        round: roundLabel,
+        trialNumber: trialNumber++,
+        rule: r,
+        ...stim
+      },
+      on_finish: data => {
+        data.correct = data.response === data.correctAnswer;
       }
     });
   }
+  return trials;
+}
 
-  const timeline = [
-    {type: 'html-keyboard-response', stimulus: '<h2>Instructions</h2><p>Press F or J according to the rule shown each trial.<br>Click any key to start.</p>'},
-    ...trials,
-    {type: 'html-keyboard-response', stimulus: '<p>Task complete — your data will be downloaded automatically.</p>', choices: []}
-  ];
+/* =====================================
+   TIMELINE
+===================================== */
+const timeline = [];
 
-  jsPsych.run(timeline);
+// Instructions
+timeline.push({
+  type: jsPsychInstructions,
+  pages: [
+    '<h2>Welcome</h2><p>You will complete two rounds of reaction time tasks.</p>'
+  ],
+  show_clickable_nav: true
+});
+
+timeline.push(demo);
+
+// ROUND 1 — focus on accuracy
+timeline.push({
+  type: jsPsychInstructions,
+  pages: ['<h3>Round 1: Accuracy Focus</h3><p>Try to be as accurate as possible.</p>'],
+  show_clickable_nav: true
+});
+
+timeline.push(...buildTrials(generateShapeStimulus, 'accuracy'));
+
+// ROUND 2 — focus on speed
+timeline.push({
+  type: jsPsychInstructions,
+  pages: ['<h3>Round 2: Speed Focus</h3><p>Try to respond as fast as possible.</p>'],
+  show_clickable_nav: true
+});
+
+timeline.push(...buildTrials(generateLetterNumberStimulus, 'speed'));
+
+// End & download
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: '<h2>Finished!</h2>',
+  choices: 'NO_KEYS',
+  trial_duration: 1200,
+  on_finish: function(){
+    const merged = jsPsych.data.get().addToAll(participantData);
+    const csv = merged.csv();
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'experiment_data.csv';
+    a.click();
+  }
+});
+
+jsPsych.run(timeline);
 </script>
+</html>
