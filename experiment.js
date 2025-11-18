@@ -121,7 +121,7 @@ function buildTrials(stimGenFunc, roundLabel) {
 ===================================== */
 const timeline = [];
 
-// Instructions
+// Welcome instructions
 timeline.push({
   type: jsPsychInstructions,
   pages: [
@@ -130,6 +130,7 @@ timeline.push({
   show_clickable_nav: true
 });
 
+// Participant info
 timeline.push(demo);
 
 // ROUND 1 — focus on accuracy
@@ -156,7 +157,7 @@ timeline.push({
   stimulus: '<h2>Finished!</h2>',
   choices: 'NO_KEYS',
   trial_duration: 1200,
-  on_finish: function(){
+  on_finish: function() {
     const merged = jsPsych.data.get().addToAll(participantData);
     const csv = merged.csv();
     const blob = new Blob([csv], {type:'text/csv'});
@@ -168,5 +169,5 @@ timeline.push({
   }
 });
 
+// Run experiment
 jsPsych.run(timeline);
-
