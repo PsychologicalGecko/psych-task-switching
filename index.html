@@ -3,17 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <title>Customized Task-Switching Experiment</title>
+
+  <!-- Core jsPsych library -->
   <script src="https://unpkg.com/jspsych@7.3.0/dist/jspsych.js"></script>
-  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.0/dist/index.js"></script>
-  <script src="https://unpkg.com/@jspsych/plugin-instructions@1.0.0/dist/index.js"></script>
-  <script src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.0/dist/index.js"></script>
+
+  <!-- Plugins (UMD/browser versions) -->
+  <script src="https://unpkg.com/jspsych@7.3.0/dist/plugins/jspsych-html-keyboard-response.js"></script>
+  <script src="https://unpkg.com/jspsych@7.3.0/dist/plugins/jspsych-instructions.js"></script>
+  <script src="https://unpkg.com/jspsych@7.3.0/dist/plugins/jspsych-survey-text.js"></script>
+
+  <!-- CSS -->
   <link href="https://unpkg.com/jspsych@7.3.0/dist/css/jspsych.css" rel="stylesheet" />
+
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
     .stim { font-size: 48px; margin-top: 20px; }
     .rule { font-size: 20px; font-weight: bold; margin-bottom: 8px; }
   </style>
 </head>
-<body></body>
-<script src="experiment.js"></script>
+
+<body>
+  <div id="jspsych-target"></div>
+  
+  <!-- Your experiment code -->
+  <script src="experiment.js"></script>
+</body>
 </html>
