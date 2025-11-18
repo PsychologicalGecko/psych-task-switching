@@ -1,80 +1,172 @@
-// ====================
-// experiment.js
-// ====================
+/* =====================================
+   SETTINGS
+===================================== */
+const N_TRIALS = 40;
+const SWITCH_PROB = 0.4; // probability of switching rules
 
-// Initialize jsPsych
-const jsPsych = initJsPsych({
-    display_element: 'jspsych-target',
-    on_finish: function() {
-        jsPsych.data.get().localSave('csv','task_switch_data.csv');
-        document.body.innerHTML = `<h2>Thank you!</h2><p>Your data has been saved.</p>`;
+/* =====================================
+   PARTICIPANT INFO COLLECTION
+===================================== */
+let participantData = {};
+const demo = {
+  type: jsPsychSurveyText,
+  questions: [
+    {prompt: 'Age:', name: 'age'},
+    {prompt: 'Gender:', name: 'gender'}
+  ],
+  on_finish: data => { participantData = data.response; }
+};
+
+/* =====================================
+   RANDOM RULE GENERATOR
+===================================== */
+function generateRandomRuleSequence(n, switchProb) {
+  const rules = [];
+  let current = Math.random() < 0.5 ? 'shape' : 'dots';
+  for (let i = 0; i < n; i++) {
+    rules.push(current);
+    if (Math.random() < switchProb) {
+      current = current === 'shape' ? 'dots' : 'shape';
     }
-});
-
-// Timeline
-let timeline = [];
-
-// Fullscreen
-timeline.push({
-    type: jsPsychFullscreen,
-    fullscreen_mode: true
-});
-
-// Demographics
-timeline.push({
-    type: jsPsychSurveyHtmlForm,
-    preamble: `<h2>Demographic Questions</h2>`,
-    html: `
-       <p>Age: <input name='age' type='number' required></p>
-       <p>Gender: <input name='gender' required></p>
-    `,
-    data: { trial_type: 'demographics' }
-});
-
-// Instructions 1 (Accuracy block)
-timeline.push({
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: `<h2>Block 1: Accuracy</h2><p>Focus on accuracy. Press SPACE to begin.</p>`,
-  choices: [' ']
-});
-
-// Block 1: Shapes / Colors
-let shapes = ['■','◆','▲','●'];
-let colors = ['red','blue','green','orange'];
-
-function shapeTrial(n){
- let shape = jsPsych.randomization.sampleWithoutReplacement(shapes,1)[0];
- let color = jsPsych.randomization.sampleWithoutReplacement(colors,1)[0];
- return {
-   type: jsPsychHtmlKeyboardResponse,
-   stimulus: `<div style='font-size:60px; color:${color}'>${shape}</div>`,
-   choices: ['f','j'],
-   data: {block:1, trial_num:n, shape, color}
- };
+  }
+  return rules;
 }
 
-for(let i=1;i<=20;i++){ timeline.push(shapeTrial(i)); }
+/* =====================================
+   SHAPES WITH DOTS (ROUND 1)
+===================================== */
+function generateShapeStimulus(rule) {
+  const shapes = ['■', '◆'];
+  const shape = shapes[Math.floor(Math.random() * shapes.length)];
+  const dots = Math.random() < 0.5 ? 2 : 3;
 
-// Instructions 2 (Speed block)
-timeline.push({
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: `<h2>Block 2: Speed</h2><p>Focus on speed. Press SPACE to begin.</p>`,
-  choices: [' ']
-});
+  let ruleInstruction = '';
+  let correctAnswer = '';
 
-// Block 2: Letters / Numbers
-let letters = ['A','C','E','G'];
-let numbers = ['1','2','3','4'];
+  if (rule === 'shape') {
+    ruleInstruction = 'Rule: Press F for ■ and J for ◆';
+    correctAnswer = shape === '■' ? 'f' : 'j';
+  } else {
+    ruleInstruction = 'Rule: Press F for 2 dots and J for 3 dots';
+    correctAnswer = dots === 2 ? 'f' : 'j';
+  }
 
-function letterTrial(n){
- let letter = jsPsych.randomization.sampleWithoutReplacement(letters,1)[0];
- let number = jsPsych.randomization.sampleWithoutReplacement(numbers,1)[0];
- return {
-   type: jsPsychHtmlKeyboardResponse,
-   stimulus: `<div style='font-size:60px'>Letter: ${letter}  |  Number: ${number}</div>`,
-   choices: ['f','j'],
-   data: {block:2, trial_num:n, letter, number}
- };
+  const html = `
+    <div class="rule">${ruleInstruction}</div>
+    <div class="stim">${shape} (${dots} dots)</div>
+  `;
+
+  return { html, shape, dots, correctAnswer };
 }
 
-for(let i=21;i<=4
+/* =====================================
+   LETTER/NUMBER STIMULI (ROUND 2)
+===================================== */
+function generateLetterNumberStimulus(rule) {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const letter = letters[Math.floor(Math.random() * letters.length)];
+  const number = Math.floor(Math.random() * 9) + 1;
+
+  let ruleInstruction = '';
+  let correctAnswer = '';
+
+  if (rule === 'shape') {
+    ruleInstruction = 'Rule: Press F for LETTER and J for NUMBER';
+    correctAnswer = /[A-Z]/.test(letter) ? 'f' : 'j';
+  } else {
+    ruleInstruction = 'Rule: Press F for EVEN and J for ODD';
+    correctAnswer = number % 2 === 0 ? 'f' : 'j';
+  }
+
+  const html = `
+    <div class="rule">${ruleInstruction}</div>
+    <div class="stim">${letter} / ${number}</div>
+  `;
+
+  return { html, letter, number, correctAnswer };
+}
+
+/* =====================================
+   TRIAL BUILDER
+===================================== */
+function buildTrials(stimGenFunc, roundLabel) {
+  const rules = generateRandomRuleSequence(N_TRIALS, SWITCH_PROB);
+  let trialNumber = 1;
+  const trials = [];
+
+  for (let i = 0; i < N_TRIALS; i++) {
+    const r = rules[i];
+    const stim = stimGenFunc(r);
+
+    trials.push({
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: stim.html,
+      choices: ['f', 'j'],
+      data: {
+        round: roundLabel,
+        trialNumber: trialNumber++,
+        rule: r,
+        ...stim
+      },
+      on_finish: data => {
+        data.correct = data.response === data.correctAnswer;
+      }
+    });
+  }
+  return trials;
+}
+
+/* =====================================
+   TIMELINE
+===================================== */
+const timeline = [];
+
+// Instructions
+timeline.push({
+  type: jsPsychInstructions,
+  pages: [
+    '<h2>Welcome</h2><p>You will complete two rounds of reaction time tasks.</p>'
+  ],
+  show_clickable_nav: true
+});
+
+timeline.push(demo);
+
+// ROUND 1 — focus on accuracy
+timeline.push({
+  type: jsPsychInstructions,
+  pages: ['<h3>Round 1: Accuracy Focus</h3><p>Try to be as accurate as possible.</p>'],
+  show_clickable_nav: true
+});
+
+timeline.push(...buildTrials(generateShapeStimulus, 'accuracy'));
+
+// ROUND 2 — focus on speed
+timeline.push({
+  type: jsPsychInstructions,
+  pages: ['<h3>Round 2: Speed Focus</h3><p>Try to respond as fast as possible.</p>'],
+  show_clickable_nav: true
+});
+
+timeline.push(...buildTrials(generateLetterNumberStimulus, 'speed'));
+
+// End & download
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: '<h2>Finished!</h2>',
+  choices: 'NO_KEYS',
+  trial_duration: 1200,
+  on_finish: function(){
+    const merged = jsPsych.data.get().addToAll(participantData);
+    const csv = merged.csv();
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'experiment_data.csv';
+    a.click();
+  }
+});
+
+jsPsych.run(timeline);
+
