@@ -2,6 +2,7 @@
 // experiment.js
 // ====================
 
+// Initialize jsPsych
 const jsPsych = initJsPsych({
     display_element: 'jspsych-target',
     on_finish: function() {
@@ -10,20 +11,24 @@ const jsPsych = initJsPsych({
     }
 });
 
+// Timeline
 let timeline = [];
 
 // Fullscreen
-timeline.push({ type: jsPsychFullscreen, fullscreen_mode: true });
+timeline.push({
+    type: jsPsychFullscreen,
+    fullscreen_mode: true
+});
 
 // Demographics
 timeline.push({
-  type: jsPsychSurveyHtmlForm,
-  preamble: `<h2>Demographic Questions</h2>`,
-  html: `
-     <p>Age: <input name='age' type='number' required></p>
-     <p>Gender: <input name='gender' required></p>
-  `,
-  data: { trial_type: 'demographics' }
+    type: jsPsychSurveyHtmlForm,
+    preamble: `<h2>Demographic Questions</h2>`,
+    html: `
+       <p>Age: <input name='age' type='number' required></p>
+       <p>Gender: <input name='gender' required></p>
+    `,
+    data: { trial_type: 'demographics' }
 });
 
 // Instructions 1 (Accuracy block)
@@ -72,10 +77,4 @@ function letterTrial(n){
  };
 }
 
-for(let i=21;i<=40;i++){ timeline.push(letterTrial(i)); }
-
-// Exit fullscreen
-timeline.push({ type: jsPsychFullscreen, fullscreen_mode: false });
-
-// Run the experiment
-jsPsych.run(timeline);
+for(let i=21;i<=4
